@@ -1,0 +1,11 @@
+{
+  "name": "polymarket-clone",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo for Polymarket Clone (contracts, subgraph, backend, frontend)",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "echo \"Use scripts/start-dev.sh or run package-level dev scripts\"",
+    "postinstall": "echo \"Run pnpm install in packages once repos are cloned\""
+  }
+}

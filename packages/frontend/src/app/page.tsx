@@ -1,0 +1,409 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useWallet } from '@/context/WalletContext';
+import { DepositModal } from '@/components/DepositModal';
+import { useUserBalance } from '@/components/WalletBalance';
+import { UserOrders } from '@/components/UserOrders';
+import axios from 'axios';
+import Link from 'next/link';
+
+interface Market {
+  id: string;
+  title: string;
+  image?: string;
+  yesPrice: number;
+  noPrice: number;
+  volume: string;
+  category: string;
+  description?: string;
+  resolutionDate?: string;
+  about?: string;
+}
+
+// Helper function to convert backend market format to frontend format
+function transformBackendMarket(backendMarket: any): Market {
+  const resolutionDate = new Date(backendMarket.endTime * 1000).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  return {
+    id: backendMarket.id,
+    title: backendMarket.question,
+    image: backendMarket.image || '❓',
+    yesPrice: 50, // Default to 50/50, will be updated with real trading data
+    noPrice: 50,
+    volume: '$0', // Will be updated with real trading data
+    category: backendMarket.category,
+    description: backendMarket.description,
+    resolutionDate,
+    about: backendMarket.description,
+  };
+}
+
+const categories = ['Trending', 'Breaking', 'Politics', 'Sports', 'Crypto', 'Finance', 'Geopolitics', 'Tech'];
+
+function MarketCard({ market, onNavigate }: { market: Market; onNavigate: (id: string) => void }) {
+  const yesPercentage = market.yesPrice;
+  const noPercentage = market.noPrice;
+  
+  return (
+    <div 
+      onClick={() => onNavigate(market.id)}
+      className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg hover:border-blue-500 hover:shadow-xl hover:shadow-blue-500/20 transition-all cursor-pointer p-4 hover:scale-105 transform"
+    >
+      <div className="flex gap-4">
+        {market.image && (
+          <div className="text-4xl flex-shrink-0">
+            {market.image}
+          </div>
+        )}
+        <div className="flex-1">
+          <h3 className="font-semibold text-white mb-3 line-clamp-2 text-sm hover:text-blue-300 transition-colors">
+            {market.title}
+          </h3>
+          
+          {/* Yes/No Grid */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <div className="text-xs text-gray-400 mb-1">Yes</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-700/50 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full"
+                    style={{ width: `${yesPercentage}%` }}
+                  />
+                </div>
+                <span className="text-sm font-bold text-green-400 min-w-8">
+                  {yesPercentage}¢
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <div className="text-xs text-gray-400 mb-1">No</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-700/50 rounded-full h-2">
+                  <div
+                    className="bg-red-500 h-2 rounded-full"
+                    style={{ width: `${noPercentage}%` }}
+                  />
+                </div>
+                <span className="text-sm font-bold text-red-400 min-w-8">
+                  {noPercentage}¢
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Footer */}
+          <div className="flex justify-between items-center text-xs text-gray-500 pt-3 border-t border-slate-700">
+            <span>{market.volume} Vol.</span>
+            <span className="bg-slate-700/50 px-2 py-1 rounded text-gray-300">
+              {market.category}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Home() {
+  const router = useRouter();
+  const { address, isConnected, isConnecting, error, balance, connectWallet, disconnectWallet, isCorrectNetwork, switchToAmoy } = useWallet();
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const { balance: walletBalance, loading: balanceLoading } = useUserBalance(address || undefined);
+  const [isCheckingWallet, setIsCheckingWallet] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [multisigAddress, setMultisigAddress] = useState<string | null>(null);
+  const [isMultisigDeployed, setIsMultisigDeployed] = useState<boolean | null>(null);
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
+
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
+  const handleMarketNavigate = (marketId: string) => {
+    router.push(`/market/${marketId}`);
+  };
+
+  const formatAddress = (addr: string) => {
+    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
+
+  useEffect(() => {
+    const fetchMultisig = async () => {
+      if (!isConnected || !address) {
+        setMultisigAddress(null);
+        setIsMultisigDeployed(null);
+        return;
+      }
+
+      setIsCheckingWallet(true);
+      setWalletError(null);
+
+      try {
+        const response = await axios.get(`${BACKEND_URL}/api/wallet/check-deployment/${address}`, {
+          timeout: 10000,
+        });
+
+        setIsMultisigDeployed(response.data.isDeployed ?? null);
+        if (response.data.proxyAddress) {
+          setMultisigAddress(response.data.proxyAddress);
+        }
+      } catch (err: any) {
+        const message = err.response?.data?.error || err.message || 'Failed to fetch multisig status';
+        setWalletError(message);
+        setIsMultisigDeployed(null);
+      } finally {
+        setIsCheckingWallet(false);
+      }
+    };
+
+    fetchMultisig();
+  }, [isConnected, address, BACKEND_URL]);
+
+  // Fetch markets from backend
+  useEffect(() => {
+    const fetchMarkets = async () => {
+      setIsLoadingMarkets(true);
+      try {
+        const response = await axios.get(`${BACKEND_URL}/api/markets`, {
+          timeout: 10000,
+        });
+
+        if (response.data.success && response.data.markets) {
+          const backendMarkets = response.data.markets.map(transformBackendMarket);
+          setMarkets(backendMarkets);
+          console.log('[Markets] Loaded', backendMarkets.length, 'markets from backend');
+        } else {
+          setMarkets([]);
+        }
+      } catch (err: any) {
+        console.error('[Markets] Failed to fetch markets:', err.message);
+        setMarkets([]);
+      } finally {
+        setIsLoadingMarkets(false);
+      }
+    };
+
+    fetchMarkets();
+  }, [BACKEND_URL]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Header */}
+      <header className="border-b border-slate-700/50 sticky top-0 z-40 bg-slate-950/95 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Top Navigation */}
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-8">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                Polymarket
+              </h1>
+              {isConnected && (
+                <div className="flex items-center gap-3">
+                  <Link 
+                    href="/admin" 
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  >
+                    Admin
+                  </Link>
+                  <span className="text-gray-400">/</span>
+                  <Link 
+                    href="/admin/resolution" 
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  >
+                    Resolve
+                  </Link>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {isConnected && address ? (
+                <div className="flex items-center gap-3">
+                  {walletBalance && (
+                    <div className="text-right px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/30 backdrop-blur">
+                      <div className="text-xs text-gray-400">
+                        Available Balance
+                      </div>
+                      <div className="text-sm font-bold text-green-400">
+                        {balanceLoading ? 'Loading...' : `${walletBalance.collateralBalanceFormatted} USDC`}
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setIsDepositModalOpen(true)}
+                    className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium transition-colors text-sm shadow-lg"
+                  >
+                    Deposit
+                  </button>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500">
+                      Connected
+                    </div>
+                    <div className="text-sm font-semibold text-white">
+                      {formatAddress(address)}
+                    </div>
+                    {balance && (
+                      <div className="text-xs text-gray-500">
+                        {balance} ETH
+                      </div>
+                    )}
+                    {isConnected && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {isCheckingWallet && 'Fetching multisig...'}
+                        {!isCheckingWallet && multisigAddress && (
+                          <span title={multisigAddress}>
+                            {isMultisigDeployed ? 'Multisig' : 'Precomputed'}: {formatAddress(multisigAddress)}
+                          </span>
+                        )}
+                        {!isCheckingWallet && !multisigAddress && 'No multisig info'}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors text-sm shadow-lg"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={connectWallet}
+                  disabled={isConnecting}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium hover:from-blue-500 hover:to-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          {walletError && (
+            <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg text-red-400 text-sm">
+              {walletError}
+            </div>
+          )}
+
+          {/* Network warning */}
+          {isConnected && !isCorrectNetwork && (
+            <div className="mb-4 p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg text-amber-300 text-sm flex items-center justify-between gap-3">
+              <span>Wrong network detected. Please switch to Polygon Amoy testnet.</span>
+              <button
+                onClick={switchToAmoy}
+                className="px-3 py-1 rounded-md bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition-colors"
+              >
+                Switch Network
+              </button>
+            </div>
+          )}
+
+          {/* Category Navigation */}
+          <div className="overflow-x-auto pb-4 -mx-4 px-4">
+            <div className="flex gap-2 min-w-min">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-all ${
+                    category === 'Trending'
+                      ? 'bg-blue-600/30 border border-blue-500 text-blue-300'
+                      : 'text-gray-400 hover:text-gray-200 border border-slate-700 hover:border-slate-600'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search and Filter */}
+        <div className="mb-8 flex gap-4 items-center">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Search markets..."
+              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/50 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur"
+            />
+          </div>
+          <button className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-700 transition-colors text-gray-300 backdrop-blur">
+            🔽
+          </button>
+        </div>
+
+        {/* Markets Grid */}
+        {isLoadingMarkets ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="text-gray-400">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Loading markets...</p>
+            </div>
+          </div>
+        ) : markets.length === 0 ? (
+          <div className="flex flex-col justify-center items-center py-20 text-center">
+            <div className="text-6xl mb-4">📊</div>
+            <h3 className="text-xl font-semibold text-white mb-2">No Markets Yet</h3>
+            <p className="text-gray-400 mb-6 max-w-md">
+              No prediction markets have been created yet. {isConnected && 'Visit the Admin page to create the first market!'}
+            </p>
+            {isConnected && (
+              <Link
+                href="/admin"
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium hover:from-blue-500 hover:to-blue-400 transition-all shadow-lg"
+              >
+                Create First Market
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {markets.map((market) => (
+              <MarketCard 
+                key={market.id} 
+                market={market}
+                onNavigate={handleMarketNavigate}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Load More */}
+        {!isLoadingMarkets && markets.length > 0 && (
+          <div className="mt-12 flex justify-center">
+            <button className="px-8 py-3 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-700 transition-colors font-medium text-white backdrop-blur">
+              Load More Markets
+            </button>
+          </div>
+        )}
+
+        {/* User Orders Section */}
+        {isConnected && (
+          <div className="mt-12">
+            <UserOrders />
+          </div>
+        )}
+      </main>
+
+      {/* Deposit Modal */}
+      <DepositModal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+      />
+    </div>
+  );
+}
