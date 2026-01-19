@@ -1,8 +1,10 @@
 import { ethers } from 'ethers';
 import { getMarketsStore } from './marketsStore';
+import { getCollectionId, getPositionId } from '../utils/ctfCalculations';
 
 const UmaCtfAdapterABI = require('../abis/UmaCtfAdapter.json');
 const ConditionalTokensABI = require('../abis/ConditionalTokens.json');
+const CTFExchangeABI = require('../abis/CTFExchange.json').abi;
 
 interface MarketConfig {
   question: string;
@@ -32,6 +34,8 @@ function getConfig() {
     adminPrivateKey: process.env.ADMIN_PRIVATE_KEY || '',
     umaCtfAdapterAddress: process.env.UMA_CTF_ADAPTER_ADDRESS || '',
     conditionalTokensAddress: process.env.CONDITIONAL_TOKENS_ADDRESS || '',
+    ctfExchangeAddress: process.env.CTF_EXCHANGE_ADDRESS || '',
+    collateralToken: process.env.COLLATERAL_TOKEN_ADDRESS || process.env.COLLATERAL_TOKEN || '',
     rewardTokenAddress: process.env.REWARD_TOKEN_ADDRESS || ethers.ZeroAddress,
     rewardAmount: process.env.REWARD_AMOUNT || '0',
     proposalBond: process.env.PROPOSAL_BOND || '0',
@@ -44,6 +48,7 @@ export class MarketCreationService {
   private adminWallet: ethers.Wallet | null = null;
   private umaAdapter: ethers.Contract | null = null;
   private ctf: ethers.Contract | null = null;
+  private ctfExchange: ethers.Contract | null = null;
   private initialized = false;
 
   constructor() {
@@ -71,10 +76,15 @@ export class MarketCreationService {
       throw new Error('CONDITIONAL_TOKENS_ADDRESS not configured');
     }
 
+    if (!config.ctfExchangeAddress) {
+      throw new Error('CTF_EXCHANGE_ADDRESS not configured');
+    }
+
     console.log('[MarketCreation] Initializing with config:', {
       rpcUrl: config.rpcUrl,
       umaAdapter: config.umaCtfAdapterAddress,
       ctf: config.conditionalTokensAddress,
+      ctfExchange: config.ctfExchangeAddress,
     });
 
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
@@ -94,6 +104,12 @@ export class MarketCreationService {
       this.provider
     );
 
+    this.ctfExchange = new ethers.Contract(
+      config.ctfExchangeAddress,
+      CTFExchangeABI,
+      this.adminWallet
+    );
+
     console.log('[MarketCreation] Contracts initialized');
     this.initialized = true;
   }
@@ -107,7 +123,7 @@ export class MarketCreationService {
     try {
       await this.initialize();
 
-      if (!this.umaAdapter || !this.ctf || !this.adminWallet) {
+      if (!this.umaAdapter || !this.ctf || !this.ctfExchange || !this.adminWallet) {
         throw new Error('Service not properly initialized');
       }
 
@@ -164,9 +180,36 @@ export class MarketCreationService {
 
       // 5. Derive token IDs for YES/NO outcomes
       const tokenIds = this.deriveTokenIds(conditionId);
-      console.log('[MarketCreation] Token IDs:', tokenIds);
+      console.log('[MarketCreation] Token IDs derived:');
+      console.log('[MarketCreation]   YES Token:', tokenIds.yesTokenId);
+      console.log('[MarketCreation]   NO Token:', tokenIds.noTokenId);
+      console.log('[MarketCreation]   Condition ID:', conditionId);
+      console.log('[MarketCreation]   Collateral Token:', config.collateralToken || process.env.COLLATERAL_TOKEN_ADDRESS);
 
-      // 6. Create market object for storage
+      // 6. Register tokens in CTF Exchange
+      console.log('[MarketCreation] Registering tokens in CTF Exchange...');
+      console.log('[MarketCreation] Calling registerToken with params:', {
+        token: tokenIds.yesTokenId,
+        complement: tokenIds.noTokenId,
+        conditionId: conditionId
+      });
+      const registerTx = await this.ctfExchange!.registerToken(
+        tokenIds.yesTokenId,
+        tokenIds.noTokenId,
+        conditionId
+      );
+      console.log('[MarketCreation] Register token transaction sent:', registerTx.hash);
+      const registerReceipt = await registerTx.wait();
+      console.log('[MarketCreation] Register token transaction confirmed in block:', registerReceipt.blockNumber);
+
+      // 7. Flag the question in UMA CTF Adapter
+      console.log('[MarketCreation] Flagging question in UMA CTF Adapter...');
+      const flagTx = await this.umaAdapter.flag(questionId);
+      console.log('[MarketCreation] Flag transaction sent:', flagTx.hash);
+      const flagReceipt = await flagTx.wait();
+      console.log('[MarketCreation] Flag transaction confirmed in block:', flagReceipt.blockNumber);
+
+      // 8. Create market object for storage
       const market = {
         id: questionId,
         conditionId,
@@ -221,52 +264,35 @@ export class MarketCreationService {
 
   /**
    * Derives YES/NO token IDs from conditionId
-   * Based on: https://gist.github.com/L-Kov/950bce141a9d1aa1ed3b1cfce6d30217
+   * Uses the standard CTF calculation utilities
    */
   private deriveTokenIds(conditionId: string): { yesTokenId: string; noTokenId: string } {
-    const parentCollectionId = ethers.ZeroHash; // For simple binary markets
+    const config = getConfig();
+    const collateralToken = config.collateralToken;
+    
+    console.log('[MarketCreation] deriveTokenIds - using collateral token:', collateralToken);
+    
+    if (!collateralToken || collateralToken === '') {
+      throw new Error('COLLATERAL_TOKEN_ADDRESS not configured');
+    }
 
-    // Collection IDs for each outcome
-    const yesCollectionId = this.getCollectionId(parentCollectionId, conditionId, 1); // YES = index 1
-    const noCollectionId = this.getCollectionId(parentCollectionId, conditionId, 2); // NO = index 2
+    // Use standard CTF calculations (indexSet: 1 = YES, 2 = NO)
+    const yesCollectionId = getCollectionId(conditionId, 1); // YES = indexSet 1
+    const noCollectionId = getCollectionId(conditionId, 2);  // NO = indexSet 2
 
-    // Position IDs (ERC1155 token IDs)
-    // Use the actual collateral token address (USDC), not zero address
-    const collateralToken = process.env.COLLATERAL_TOKEN_ADDRESS || process.env.COLLATERAL_TOKEN || ethers.ZeroAddress;
-    const yesTokenId = this.getPositionId(collateralToken, yesCollectionId);
-    const noTokenId = this.getPositionId(collateralToken, noCollectionId);
+    const yesTokenId = getPositionId(collateralToken, yesCollectionId);
+    const noTokenId = getPositionId(collateralToken, noCollectionId);
+
+    console.log('[MarketCreation] Token IDs derived:');
+    console.log('[MarketCreation]   YES Collection ID:', yesCollectionId);
+    console.log('[MarketCreation]   NO Collection ID:', noCollectionId);
+    console.log('[MarketCreation]   YES Token ID:', yesTokenId);
+    console.log('[MarketCreation]   NO Token ID:', noTokenId);
 
     return {
       yesTokenId,
       noTokenId,
     };
-  }
-
-  /**
-   * Computes collectionId for a given outcome
-   * collectionId = keccak256(abi.encodePacked(parentCollectionId, conditionId, indexSet))
-   */
-  private getCollectionId(parentCollectionId: string, conditionId: string, outcomeIndex: number): string {
-    // indexSet is a bitmap where bit at position (outcomeIndex - 1) is set
-    // For binary markets: YES = index 1 (bit 0), NO = index 2 (bit 1)
-    const indexSet = 1 << (outcomeIndex - 1);
-
-    return ethers.keccak256(
-      ethers.solidityPacked(
-        ['bytes32', 'bytes32', 'uint256'],
-        [parentCollectionId, conditionId, indexSet]
-      )
-    );
-  }
-
-  /**
-   * Computes positionId (ERC1155 token ID)
-   * positionId = uint(keccak256(abi.encodePacked(collateralToken, collectionId)))
-   */
-  private getPositionId(collateralToken: string, collectionId: string): string {
-    return ethers.keccak256(
-      ethers.solidityPacked(['address', 'bytes32'], [collateralToken, collectionId])
-    );
   }
 
   /**
