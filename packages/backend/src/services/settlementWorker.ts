@@ -33,17 +33,19 @@ export class SettlementWorker {
             const txHash = await this.executor.settle(job);
             console.log('[SettlementWorker] ✅ Settled on-chain tx:', txHash);
             
-            // Update order statuses after successful settlement
+            // Update order statuses and mark as settled on-chain
             const orderBookService = getOrderBookService();
             
-            // Mark taker order as filled
+            // Mark taker order as settled on-chain
             orderBookService.updateOrderStatus(job.takerOrder.id, OrderStatus.FULLY_FILLED);
-            console.log(`[SettlementWorker] Marked taker order ${job.takerOrder.id} as FULLY_FILLED`);
+            orderBookService.markOrderSettled(job.takerOrder.id, txHash);
+            console.log(`[SettlementWorker] Marked taker order ${job.takerOrder.id} as settled on-chain`);
             
-            // Mark all maker orders as filled
+            // Mark all maker orders as settled on-chain
             for (const makerOrder of job.makerOrders) {
               orderBookService.updateOrderStatus(makerOrder.id, OrderStatus.FULLY_FILLED);
-              console.log(`[SettlementWorker] Marked maker order ${makerOrder.id} as FULLY_FILLED`);
+              orderBookService.markOrderSettled(makerOrder.id, txHash);
+              console.log(`[SettlementWorker] Marked maker order ${makerOrder.id} as settled on-chain`);
             }
           } catch (err) {
             console.error('[SettlementWorker] ❌ Settlement failed:', err);

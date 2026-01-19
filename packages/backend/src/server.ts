@@ -106,13 +106,15 @@ app.post('/api/settlement/process', async (_req, res) => {
         const txHash = await executor.settle(job);
         console.log('[Settlement] Manually processed job tx:', txHash);
         
-        // Update order statuses after successful settlement
+        // Update order statuses and mark as settled on-chain
         orderBookService.updateOrderStatus(job.takerOrder.id, OrderStatus.FULLY_FILLED);
-        console.log(`[Settlement] Marked taker order ${job.takerOrder.id} as FULLY_FILLED`);
+        orderBookService.markOrderSettled(job.takerOrder.id, txHash);
+        console.log(`[Settlement] Marked taker order ${job.takerOrder.id} as settled on-chain`);
         
         for (const makerOrder of job.makerOrders) {
           orderBookService.updateOrderStatus(makerOrder.id, OrderStatus.FULLY_FILLED);
-          console.log(`[Settlement] Marked maker order ${makerOrder.id} as FULLY_FILLED`);
+          orderBookService.markOrderSettled(makerOrder.id, txHash);
+          console.log(`[Settlement] Marked maker order ${makerOrder.id} as settled on-chain`);
         }
         
         processed += 1;

@@ -84,6 +84,8 @@ export interface Order {
   // Optional metadata
   txHash?: string;               // Transaction hash if submitted on-chain
   originalAmount?: number;       // For partial fills tracking
+  settlementTxHash?: string;     // Transaction hash of on-chain settlement (if settled)
+  settledOnChain?: boolean;      // Whether the order has been settled on-chain
 }
 
 /**

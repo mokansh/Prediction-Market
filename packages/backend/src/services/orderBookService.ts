@@ -85,6 +85,14 @@ class OrderBookService {
   }
 
   /**
+   * Get all orders
+   */
+  getAllOrders(): Order[] {
+    this.loadFromFile();
+    return Array.from(this.allOrders.values());
+  }
+
+  /**
    * Get all orders for a user
    */
   getUserOrders(userAddress: string): Order[] {
@@ -186,6 +194,26 @@ class OrderBookService {
     }
 
     this.saveToFile();
+    return true;
+  }
+
+  /**
+   * Mark order as settled on-chain with transaction hash
+   */
+  markOrderSettled(orderId: string, txHash: string): boolean {
+    this.loadFromFile();
+    const order = this.allOrders.get(orderId);
+    
+    if (!order) {
+      return false;
+    }
+
+    order.settledOnChain = true;
+    order.settlementTxHash = txHash;
+    order.updatedAt = Date.now();
+
+    this.saveToFile();
+    console.log(`[OrderBookService] Marked order ${orderId} as settled on-chain (tx: ${txHash})`);
     return true;
   }
 

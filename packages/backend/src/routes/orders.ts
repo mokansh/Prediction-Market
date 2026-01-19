@@ -22,6 +22,7 @@ import {
   type EIP712OrderMessage,
 } from '../utils/eip712';
 import { settlementQueue } from '../services/settlementQueue';
+import { SettlementRetryService } from '../services/settlementRetryService';
 
 const router = Router();
 
@@ -52,6 +53,16 @@ const router = Router();
  */
 router.post('/place', async (req: Request, res: Response) => {
   try {
+    // Check for any previously matched but unsettled orders and retry settlement
+    // This ensures orders that failed settlement (e.g., due to token registration issues)
+    // get another chance now that tokens are registered
+    try {
+      await SettlementRetryService.retryUnprocessedMatches();
+    } catch (retryErr) {
+      // Log but don't fail the order placement
+      console.error('[Orders] Settlement retry failed:', retryErr);
+    }
+
     const {
       marketId,
       orderData,
