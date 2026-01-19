@@ -13,6 +13,8 @@ import { SettlementWorker } from './services/settlementWorker';
 import { SettlementExecutor } from './services/settlementExecutor';
 import { settlementQueue } from './services/settlementQueue';
 import { getEventListenerService } from './services/eventListenerService';
+import { getOrderBookService } from './services/orderBookService';
+import { OrderStatus } from './types/orders';
 import { swaggerSpec } from './swagger';
 
 // Load environment variables from .env file
@@ -93,6 +95,7 @@ app.get('/api/settlement/status', (_req, res) => {
 app.post('/api/settlement/process', async (_req, res) => {
   try {
     const executor = new SettlementExecutor();
+    const orderBookService = getOrderBookService();
     let processed = 0;
 
     while (settlementQueue.size() > 0) {
@@ -102,6 +105,16 @@ app.post('/api/settlement/process', async (_req, res) => {
       try {
         const txHash = await executor.settle(job);
         console.log('[Settlement] Manually processed job tx:', txHash);
+        
+        // Update order statuses after successful settlement
+        orderBookService.updateOrderStatus(job.takerOrder.id, OrderStatus.FULLY_FILLED);
+        console.log(`[Settlement] Marked taker order ${job.takerOrder.id} as FULLY_FILLED`);
+        
+        for (const makerOrder of job.makerOrders) {
+          orderBookService.updateOrderStatus(makerOrder.id, OrderStatus.FULLY_FILLED);
+          console.log(`[Settlement] Marked maker order ${makerOrder.id} as FULLY_FILLED`);
+        }
+        
         processed += 1;
       } catch (err: any) {
         console.error('[Settlement] Manual processing failed:', err?.message || err);

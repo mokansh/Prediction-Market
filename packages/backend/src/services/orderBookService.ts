@@ -157,6 +157,7 @@ class OrderBookService {
 
   /**
    * Update order status (e.g., mark as filled, cancelled)
+   * If status is FULLY_FILLED, also removes the order from the active order book
    */
   updateOrderStatus(orderId: string, status: OrderStatus): boolean {
     this.loadFromFile();
@@ -168,6 +169,22 @@ class OrderBookService {
 
     order.status = status;
     order.updatedAt = Date.now();
+
+    // If order is fully filled, remove it from the order book
+    if (status === OrderStatus.FULLY_FILLED) {
+      const bookKey = this.getOrderBookKey(order.marketId, order.outcome);
+      const book = this.orderBooks.get(bookKey);
+      
+      if (book) {
+        if (order.side === OrderSide.BUY) {
+          book.buySide = book.buySide.filter(o => o.id !== orderId);
+        } else {
+          book.sellSide = book.sellSide.filter(o => o.id !== orderId);
+        }
+        console.log(`[OrderBookService] Removed fully filled order from book: ${orderId}`);
+      }
+    }
+
     this.saveToFile();
     return true;
   }

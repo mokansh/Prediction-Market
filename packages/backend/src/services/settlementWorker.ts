@@ -1,5 +1,7 @@
 import { settlementQueue } from './settlementQueue';
 import { SettlementExecutor } from './settlementExecutor';
+import { getOrderBookService } from './orderBookService';
+import { OrderStatus } from '../types/orders';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -30,6 +32,19 @@ export class SettlementWorker {
           try {
             const txHash = await this.executor.settle(job);
             console.log('[SettlementWorker] ✅ Settled on-chain tx:', txHash);
+            
+            // Update order statuses after successful settlement
+            const orderBookService = getOrderBookService();
+            
+            // Mark taker order as filled
+            orderBookService.updateOrderStatus(job.takerOrder.id, OrderStatus.FULLY_FILLED);
+            console.log(`[SettlementWorker] Marked taker order ${job.takerOrder.id} as FULLY_FILLED`);
+            
+            // Mark all maker orders as filled
+            for (const makerOrder of job.makerOrders) {
+              orderBookService.updateOrderStatus(makerOrder.id, OrderStatus.FULLY_FILLED);
+              console.log(`[SettlementWorker] Marked maker order ${makerOrder.id} as FULLY_FILLED`);
+            }
           } catch (err) {
             console.error('[SettlementWorker] ❌ Settlement failed:', err);
             // In a real system, re-enqueue or move to DLQ; for now, drop
