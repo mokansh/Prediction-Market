@@ -23,7 +23,7 @@ interface Market {
 }
 
 // Helper function to convert backend market format to frontend format
-function transformBackendMarket(backendMarket: any): Market {
+function transformBackendMarket(backendMarket: any, prices?: { yesPrice: number; noPrice: number }): Market {
   const resolutionDate = new Date(backendMarket.endTime * 1000).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -34,9 +34,9 @@ function transformBackendMarket(backendMarket: any): Market {
     id: backendMarket.id,
     title: backendMarket.question,
     image: backendMarket.image || '❓',
-    yesPrice: 50, // Default to 50/50, will be updated with real trading data
-    noPrice: 50,
-    volume: '$0', // Will be updated with real trading data
+    yesPrice: prices?.yesPrice ?? 50, // cents
+    noPrice: prices?.noPrice ?? 50,
+    volume: '$0', // TODO: replace with real volume once available
     category: backendMarket.category,
     description: backendMarket.description,
     resolutionDate,
@@ -123,6 +123,8 @@ export default function Home() {
   const [isMultisigDeployed, setIsMultisigDeployed] = useState<boolean | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
+  const [showWalletMenu, setShowWalletMenu] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
@@ -132,6 +134,16 @@ export default function Home() {
 
   const formatAddress = (addr: string) => {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   useEffect(() => {
@@ -176,9 +188,30 @@ export default function Home() {
         });
 
         if (response.data.success && response.data.markets) {
-          const backendMarkets = response.data.markets.map(transformBackendMarket);
-          setMarkets(backendMarkets);
-          console.log('[Markets] Loaded', backendMarkets.length, 'markets from backend');
+          // Fetch prices for each market in parallel
+          const marketsWithPrices = await Promise.all(
+            response.data.markets.map(async (m: any) => {
+              try {
+                const priceRes = await axios.get(`${BACKEND_URL}/api/orders/market/${m.id}/prices`, {
+                  timeout: 8000,
+                });
+
+                if (priceRes.data?.success && priceRes.data.prices) {
+                  const yesPrice = Math.round((priceRes.data.prices.yes?.midPrice ?? 0.5) * 100);
+                  const noPrice = Math.round((priceRes.data.prices.no?.midPrice ?? 0.5) * 100);
+                  return transformBackendMarket(m, { yesPrice, noPrice });
+                }
+              } catch (e) {
+                console.warn('[Markets] Price fetch failed for market', m.id);
+              }
+
+              // Fallback to default 50/50 if price fetch fails
+              return transformBackendMarket(m);
+            })
+          );
+
+          setMarkets(marketsWithPrices);
+          console.log('[Markets] Loaded', marketsWithPrices.length, 'markets from backend');
         } else {
           setMarkets([]);
         }
@@ -241,36 +274,71 @@ export default function Home() {
                   >
                     Deposit
                   </button>
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500">
-                      Connected
-                    </div>
-                    <div className="text-sm font-semibold text-white">
-                      {formatAddress(address)}
-                    </div>
-                    {balance && (
-                      <div className="text-xs text-gray-500">
-                        {balance} ETH
+                  
+                  {/* Wallet Menu */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowWalletMenu(!showWalletMenu)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium transition-colors text-sm shadow-lg"
+                    >
+                      <div className="text-right">
+                        <div className="text-xs text-gray-400">Connected</div>
+                        <div className="text-sm font-semibold">{formatAddress(address)}</div>
                       </div>
-                    )}
-                    {isConnected && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {isCheckingWallet && 'Fetching multisig...'}
-                        {!isCheckingWallet && multisigAddress && (
-                          <span title={multisigAddress}>
-                            {isMultisigDeployed ? 'Multisig' : 'Precomputed'}: {formatAddress(multisigAddress)}
-                          </span>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {showWalletMenu && (
+                      <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+                        <div className="p-4 border-b border-slate-700">
+                          <div className="text-xs text-gray-400 mb-1">MetaMask Wallet</div>
+                          <div className="text-sm font-mono text-white break-all">{address}</div>
+                          {balance && (
+                            <div className="text-xs text-gray-500 mt-1">{balance} ETH</div>
+                          )}
+                        </div>
+
+                        {multisigAddress && (
+                          <div className="p-4 border-b border-slate-700 bg-blue-500/5">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs text-blue-400 font-semibold">
+                                Polymarket Wallet {isMultisigDeployed ? '(Deployed)' : '(Precomputed)'}
+                              </div>
+                              <button
+                                onClick={() => copyToClipboard(multisigAddress)}
+                                className="px-2 py-1 rounded text-xs bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                              >
+                                {copiedAddress ? '✓ Copied' : 'Copy'}
+                              </button>
+                            </div>
+                            <div className="text-sm font-mono text-white break-all">{multisigAddress}</div>
+                          </div>
                         )}
-                        {!isCheckingWallet && !multisigAddress && 'No multisig info'}
+
+                        {isCheckingWallet && (
+                          <div className="p-4 text-center text-gray-400 text-sm">
+                            Loading wallet info...
+                          </div>
+                        )}
+
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              disconnectWallet();
+                              setShowWalletMenu(false);
+                            }}
+                            className="w-full px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors text-sm"
+                          >
+                            Disconnect Wallet
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={disconnectWallet}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors text-sm shadow-lg"
-                  >
-                    Disconnect
-                  </button>
                 </div>
               ) : (
                 <button

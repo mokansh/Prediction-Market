@@ -87,6 +87,13 @@ export default function MarketDetailPage() {
       ? market!.yesPrice / 100 
       : market!.noPrice / 100;
   };
+  
+    const marketProbabilities = market
+      ? {
+          yes: (market.yesPrice / 100) || 0,
+          no: (market.noPrice / 100) || 0,
+        }
+      : { yes: 0.5, no: 0.5 };
 
   const resetInputs = () => {
     setAmount('');
@@ -112,21 +119,37 @@ export default function MarketDetailPage() {
             day: 'numeric'
           });
 
+          // Fetch live prices for this market
+          let yesPrice = 50;
+          let noPrice = 50;
+
+          try {
+            const priceRes = await axios.get(`${BACKEND_URL}/api/orders/market/${backendMarket.id}/prices`, {
+              timeout: 8000,
+            });
+            if (priceRes.data?.success && priceRes.data.prices) {
+              yesPrice = Math.round((priceRes.data.prices.yes?.midPrice ?? 0.5) * 100);
+              noPrice = Math.round((priceRes.data.prices.no?.midPrice ?? 0.5) * 100);
+            }
+          } catch (err) {
+            console.warn('[MarketDetail] Failed to fetch prices for market', backendMarket.id);
+          }
+
           const formattedMarket: MarketDetail = {
             id: backendMarket.id,
             conditionId: backendMarket.conditionId,
             title: backendMarket.question,
             image: backendMarket.image || '❓',
-            yesPrice: 50,
-            noPrice: 50,
+            yesPrice,
+            noPrice,
             volume: '$0',
             category: backendMarket.category,
             description: backendMarket.description,
             resolutionDate,
             about: backendMarket.description,
             outcomes: [
-              { name: 'yes', probability: 50 },
-              { name: 'no', probability: 50 }
+              { name: 'yes', probability: yesPrice },
+              { name: 'no', probability: noPrice }
             ]
           };
 

@@ -76,6 +76,9 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const [approvalsCompleted, setApprovalsCompleted] = useState<Set<string>>(new Set());
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
   const [currentApprovalStep, setCurrentApprovalStep] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isCheckingApprovals, setIsCheckingApprovals] = useState(false);
 
   // Check if multisig wallet is deployed when modal opens
   useEffect(() => {
@@ -83,6 +86,13 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       checkWalletDeployment();
     }
   }, [isOpen, address, isConnected]);
+
+  // Check approval status when wallet is deployed
+  useEffect(() => {
+    if (isOpen && isWalletDeployed && proxyAddress && window.ethereum) {
+      checkApprovalStatus();
+    }
+  }, [isOpen, isWalletDeployed, proxyAddress]);
 
   // Utility function to safely get checksummed address
   const getSafeAddress = (address: string): string => {
@@ -197,6 +207,83 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       setIsWalletDeployed(false);
     } finally {
       setIsCheckingDeployment(false);
+    }
+  };
+
+  const checkApprovalStatus = async () => {
+    if (!proxyAddress || !window.ethereum) return;
+
+    setIsCheckingApprovals(true);
+    try {
+      console.log('[DepositModal] Checking approval status for:', proxyAddress);
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // Check USDC approval for CTF Exchange
+      const usdcContract = new ethers.Contract(
+        COLLATERAL_TOKEN,
+        ['function allowance(address owner, address spender) view returns (uint256)'],
+        provider
+      );
+
+      const ctfContract = new ethers.Contract(
+        CTF_CONTRACT,
+        ['function isApprovedForAll(address account, address operator) view returns (bool)'],
+        provider
+      );
+
+      // Check all necessary approvals
+      const [
+        usdcToCTFAllowance,
+        usdcToCTFExchangeAllowance,
+        ctfToExchangeApproval,
+        usdcToNegRiskAllowance,
+        usdcToAdapterAllowance,
+        ctfToNegRiskApproval,
+        ctfToAdapterApproval,
+      ] = await Promise.all([
+        usdcContract.allowance(proxyAddress, CTF_CONTRACT),
+        usdcContract.allowance(proxyAddress, CTF_EXCHANGE),
+        ctfContract.isApprovedForAll(proxyAddress, CTF_EXCHANGE),
+        usdcContract.allowance(proxyAddress, NEG_RISK_EXCHANGE),
+        usdcContract.allowance(proxyAddress, NEG_RISK_ADAPTER),
+        ctfContract.isApprovedForAll(proxyAddress, NEG_RISK_EXCHANGE),
+        ctfContract.isApprovedForAll(proxyAddress, NEG_RISK_ADAPTER),
+      ]);
+
+      console.log('[DepositModal] Approval status:', {
+        usdcToCTF: usdcToCTFAllowance.toString(),
+        usdcToCTFExchange: usdcToCTFExchangeAllowance.toString(),
+        ctfToExchange: ctfToExchangeApproval,
+        usdcToNegRisk: usdcToNegRiskAllowance.toString(),
+        usdcToAdapter: usdcToAdapterAllowance.toString(),
+        ctfToNegRisk: ctfToNegRiskApproval,
+        ctfToAdapter: ctfToAdapterApproval,
+      });
+
+      // Check if all approvals are set (allowances > 0 and approvedForAll = true)
+      const allApproved = 
+        usdcToCTFAllowance > 0n &&
+        usdcToCTFExchangeAllowance > 0n &&
+        ctfToExchangeApproval &&
+        usdcToNegRiskAllowance > 0n &&
+        usdcToAdapterAllowance > 0n &&
+        ctfToNegRiskApproval &&
+        ctfToAdapterApproval;
+
+      if (allApproved) {
+        console.log('[DepositModal] All approvals already set');
+        setApprovalsCompleted(new Set(['ctf', 'ctfExchange', 'negRisk']));
+      } else {
+        console.log('[DepositModal] Approvals not complete');
+        setApprovalsCompleted(new Set());
+      }
+    } catch (err: any) {
+      console.error('[DepositModal] Error checking approval status:', err);
+      // Don't set error state here, just assume approvals not done
+      setApprovalsCompleted(new Set());
+    } finally {
+      setIsCheckingApprovals(false);
     }
   };
 
@@ -404,6 +491,72 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
     }
   };
 
+  const handleDeposit = async () => {
+    if (!depositAmount || !proxyAddress || !window.ethereum) {
+      setError('Please enter an amount');
+      return;
+    }
+
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    setIsDepositing(true);
+    setError(null);
+
+    try {
+      console.log('[DepositModal] Starting deposit for:', proxyAddress);
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // ERC20 Token contract (USDC-like token on Amoy)
+      const tokenContract = new ethers.Contract(
+        COLLATERAL_TOKEN,
+        [
+          'function mint(address to, uint256 amount) public',
+          'function decimals() view returns (uint8)',
+        ],
+        signer
+      );
+
+      // Get token decimals (typically 6 for USDC)
+      const decimals = await tokenContract.decimals();
+      console.log('[DepositModal] Token decimals:', decimals);
+
+      // Calculate amount with decimals
+      const amountWithDecimals = ethers.parseUnits(depositAmount, decimals);
+      console.log('[DepositModal] Minting', amountWithDecimals.toString(), 'tokens to', proxyAddress);
+
+      // Call mint function
+      const tx = await tokenContract.mint(proxyAddress, amountWithDecimals);
+      console.log('[DepositModal] Mint transaction sent:', tx.hash);
+
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      console.log('[DepositModal] Mint transaction confirmed:', receipt.hash);
+
+      alert(`Successfully deposited ${depositAmount} USDC to your Polymarket wallet!`);
+      setDepositAmount('');
+      
+      // Close modal after successful deposit
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err: any) {
+      console.error('[DepositModal] Deposit error:', err);
+      if (err.code === 'ACTION_REJECTED') {
+        setError('Transaction was rejected');
+      } else {
+        setError(err.message || 'Failed to deposit');
+      }
+    } finally {
+      setIsDepositing(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -488,73 +641,106 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
                 )}
               </div>
 
-              {/* Token Approval Section */}
-              <div className="border border-gray-600 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Token Approvals</h3>
-                  {approvalsCompleted.size > 0 && (
-                    <span className="text-xs text-green-400">
-                      ✓ Approved
-                    </span>
-                  )}
+              {isCheckingApprovals ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <p className="text-gray-400 mt-4 text-sm">Checking approval status...</p>
                 </div>
-
-                <p className="text-xs text-gray-400">
-                  Approve tokens for trading on CTF Exchange and Neg Risk Exchange
-                </p>
-
-                {error && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                    <p className="text-red-300 text-xs">{error}</p>
+              ) : (
+                <>
+                  {/* Token Approval Section */}
+                  {approvalsCompleted.size === 0 && (
+                    <div className="border border-gray-600 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Token Approvals</h3>
                   </div>
-                )}
 
-                {currentApprovalStep && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-400"></div>
-                      <p className="text-blue-300 text-xs">{currentApprovalStep}</p>
+                  <p className="text-xs text-gray-400">
+                    Approve tokens for trading on CTF Exchange and Neg Risk Exchange
+                  </p>
+
+                  {error && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                      <p className="text-red-300 text-xs">{error}</p>
                     </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleApproveTokens}
-                  disabled={isProcessingApproval || approvalsCompleted.size > 0}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center text-sm"
-                >
-                  {isProcessingApproval ? (
-                    <>
-                      <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Approving...
-                    </>
-                  ) : approvalsCompleted.size > 0 ? (
-                    '✓ Approvals Complete'
-                  ) : (
-                    'Approve Tokens'
                   )}
-                </button>
-              </div>
+
+                  {currentApprovalStep && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-blue-400"></div>
+                        <p className="text-blue-300 text-xs">{currentApprovalStep}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleApproveTokens}
+                    disabled={isProcessingApproval}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center text-sm"
+                  >
+                    {isProcessingApproval ? (
+                      <>
+                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Approving...
+                      </>
+                    ) : (
+                      'Approve Tokens'
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Deposit Section */}
               <div className="space-y-3">
+                {approvalsCompleted.size > 0 && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-3">
+                    <p className="text-green-300 text-xs">
+                      ✓ Token approvals completed
+                    </p>
+                  </div>
+                )}
+                
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-blue-300 text-xs">
+                    💡 You can mint dummy USDC for testing
+                  </p>
+                </div>
+                
                 <label className="block text-sm font-medium text-gray-300">
                   Amount (USDC)
                 </label>
                 <input
                   type="number"
                   placeholder="0.00"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
                   disabled={approvalsCompleted.size === 0}
                   className="w-full bg-[#0f1014] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    <p className="text-red-300 text-xs">{error}</p>
+                  </div>
+                )}
               </div>
 
               <button
-                disabled={approvalsCompleted.size === 0}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 disabled:opacity-50"
+                onClick={handleDeposit}
+                disabled={approvalsCompleted.size === 0 || isDepositing || !depositAmount}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
               >
-                Deposit
+                {isDepositing ? (
+                  <>
+                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Depositing...
+                  </>
+                ) : (
+                  'Deposit'
+                )}
               </button>
+              </>
+              )}
             </div>
           ) : null}
         </div>

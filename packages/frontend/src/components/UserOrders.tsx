@@ -99,11 +99,7 @@ export function UserOrders() {
   }
 
   if (orders.length === 0) {
-    return (
-      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-        No orders yet
-      </div>
-    );
+    return null;
   }
 
   const getStatusColor = (status: string) => {
