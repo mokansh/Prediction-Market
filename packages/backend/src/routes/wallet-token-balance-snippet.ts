@@ -5,6 +5,13 @@
  * This is useful for checking YES/NO token balances when the token ID is known
  * but not necessarily stored in the market data
  */
+import { Router, Request, Response } from 'express';
+import { ethers } from 'ethers';
+import ConditionalTokensABI from '../abis/ConditionalTokens.json';
+import WalletBalanceService from '../services/walletBalanceService';
+
+const router = Router();
+
 router.get('/token-balance/:walletAddress/:tokenId', async (req: Request, res: Response) => {
   try {
     const { walletAddress, tokenId } = req.params;
@@ -34,12 +41,13 @@ router.get('/token-balance/:walletAddress/:tokenId', async (req: Request, res: R
       });
     }
 
-    // Get balance from ConditionalTokens contract
-    const ConditionalTokensABI = require('../abis/ConditionalTokens.json');
+
+    // Use WalletBalanceService singleton to get provider
+    const provider = WalletBalanceService.getInstance()['provider'] || new ethers.JsonRpcProvider(process.env.RPC_URL || 'https://rpc-amoy.polygon.technology/');
     const ctfContract = new ethers.Contract(
       conditionalTokensAddress,
       ConditionalTokensABI,
-      getBalanceService()['provider'] || new ethers.JsonRpcProvider(process.env.RPC_URL || 'https://rpc-amoy.polygon.technology/')
+      provider
     );
 
     const balance = await ctfContract.balanceOf(walletAddress, tokenId);
@@ -62,3 +70,5 @@ router.get('/token-balance/:walletAddress/:tokenId', async (req: Request, res: R
     });
   }
 });
+
+export default router;
