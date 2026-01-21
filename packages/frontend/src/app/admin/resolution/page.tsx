@@ -41,7 +41,7 @@ export default function AdminResolutionPage() {
   const fetchMarkets = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/markets');
+      const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + '/api/markets');
       console.log('[AdminResolution] Markets API Response:', response.data);
       
       // Handle both response formats

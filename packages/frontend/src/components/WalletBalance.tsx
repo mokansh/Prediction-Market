@@ -47,7 +47,7 @@ export function useUserBalance(userAddress?: string) {
     setLoading(true);
     try {
       console.log('[WalletBalance] Fetching balance for:', userAddress);
-      const response = await fetch(`/api/wallet/balance/${userAddress}`);
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL +`/api/wallet/balance/${userAddress}`);
       console.log('[WalletBalance] Response status:', response.status);
       const data = await response.json();
       console.log('[WalletBalance] Response data:', data);
@@ -109,7 +109,7 @@ export function useBalanceCheck(userAddress?: string) {
     setError(null);
 
     try {
-      const response = await fetch('/api/wallet/check-sufficient', {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + '/api/wallet/check-sufficient', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -148,7 +148,7 @@ export function useWalletMapping() {
     setError(null);
 
     try {
-      const response = await fetch('/api/wallet/update-mapping', {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + '/api/wallet/update-mapping', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userAddress, walletAddress })
@@ -316,7 +316,7 @@ export function OrderForm({ userAddress }: { userAddress?: string }) {
       // Place order
       setStatus({ type: 'info', message: '📤 Placing order...' });
 
-      const response = await fetch('/api/orders/place', {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL +'/api/orders/place', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

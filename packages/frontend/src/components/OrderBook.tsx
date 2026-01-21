@@ -82,7 +82,7 @@ export function OrderBook({ marketId, outcome }: OrderBookProps) {
 
   const fetchOrderBook = async () => {
     try {
-      const response = await fetch(`/api/orders/market/${marketId}?outcome=${outcome}`);
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/orders/market/${marketId}?outcome=${outcome}`);
       const data = await response.json();
 
       if (data.success) {

@@ -73,7 +73,7 @@ export function MarketModal({ market, isOpen, onClose }: MarketModalProps) {
     if (isConnected && address) {
       const fetchMultisigAddress = async () => {
         try {
-          const response = await fetch(`/api/wallet/check-deployment/${address}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/check-deployment/${address}`);
           if (response.ok) {
             const data = await response.json();
             if (data.proxyAddress) {
@@ -107,7 +107,7 @@ export function MarketModal({ market, isOpen, onClose }: MarketModalProps) {
     if (conditionKey && !marketCondition) {
       const fetchMarketCondition = async () => {
         try {
-          const response = await fetch(`/api/market-conditions/condition/${conditionKey}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/market-conditions/condition/${conditionKey}`);
           if (response.ok) {
             const data = await response.json();
             if (data.marketCondition) {
@@ -134,7 +134,7 @@ export function MarketModal({ market, isOpen, onClose }: MarketModalProps) {
           setOutcomeBalancesLoading(true);
           // Use multisig address if available, otherwise use connected address
           const walletToCheck = multisigAddress || address;
-          const response = await fetch(`/api/wallet/market-balances/${address}/${market.id}?walletAddress=${walletToCheck}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/market-balances/${address}/${market.id}?walletAddress=${walletToCheck}`);
           if (response.ok) {
             const data = await response.json();
             if (data.success) {
@@ -276,7 +276,7 @@ export function MarketModal({ market, isOpen, onClose }: MarketModalProps) {
       setOrderError(null); // Clear the waiting message
 
       // Submit signed order to backend
-      const response = await fetch('/api/orders/place', {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + '/api/orders/place', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

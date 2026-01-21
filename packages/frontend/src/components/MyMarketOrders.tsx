@@ -38,7 +38,7 @@ export function MyMarketOrders({ marketId, userAddress }: MyMarketOrdersProps) {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/orders/user/${userAddress}`);
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/orders/user/${userAddress}`);
       const data = await response.json();
 
       if (data.success) {

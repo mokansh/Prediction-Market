@@ -56,7 +56,7 @@ export function UserOrders() {
 
   const cancelOrder = async (orderId: string) => {
     try {
-      const response = await fetch(`/api/orders/${orderId}`, {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/orders/${orderId}`, {
         method: 'DELETE'
       });
 
