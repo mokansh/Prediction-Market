@@ -11,7 +11,7 @@ interface DepositModalProps {
 }
 
 const SAFE_PROXY_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_SAFE_PROXY_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000';
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://adorable-dream-production-8c58.up.railway.app';
 
 // Contract addresses
 const COLLATERAL_TOKEN = process.env.NEXT_PUBLIC_COLLATERAL_TOKEN || '0x7006b5a13d347dab68b9c2caabee2e6bc11296fd';
