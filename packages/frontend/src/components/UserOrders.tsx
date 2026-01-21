@@ -37,7 +37,7 @@ export function UserOrders() {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/orders/user/${address}`);
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL +`/api/orders/user/${address}`);
       const data = await response.json();
 
       if (data.success) {

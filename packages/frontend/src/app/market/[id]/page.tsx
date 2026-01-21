@@ -331,7 +331,7 @@ export default function MarketDetailPage() {
         try {
           setOutcomeBalancesLoading(true);
           const walletToCheck = multisigAddress || address;
-          const response = await fetch(`/api/wallet/market-balances/${address}/${market.id}?walletAddress=${walletToCheck}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL +`/api/wallet/market-balances/${address}/${market.id}?walletAddress=${walletToCheck}`);
           if (response.ok) {
             const data = await response.json();
             if (data.success) {
