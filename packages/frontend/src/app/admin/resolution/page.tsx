@@ -91,7 +91,7 @@ export default function AdminResolutionPage() {
         success: null,
       }));
 
-      const response = await axios.post('/api/admin/resolve-market', {
+      const response = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL +'/api/admin/resolve-market', {
         marketId: state.selectedMarketId,
         outcome: state.selectedOutcome,
       });
