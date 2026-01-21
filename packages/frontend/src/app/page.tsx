@@ -62,7 +62,7 @@ function MarketCard({ market, onNavigate }: { market: Market; onNavigate: (id: s
           </div>
         )}
         <div className="flex-1">
-          <h3 className="font-semibold text-white mb-3 line-clamp-2 text-sm hover:text-blue-300 transition-colors">
+          <h3 className="font-semibold text-base font-semibold transition-all px-5 py-2 rounded-full bg-slate-800/60 text-gray-300 border border-slate-700 hover:bg-slate-700 hover:text-white hover:border-blue-400 mb-3 break-words">
             {market.title}
           </h3>
           
@@ -102,13 +102,50 @@ function MarketCard({ market, onNavigate }: { market: Market; onNavigate: (id: s
           {/* Footer */}
           <div className="flex justify-between items-center text-xs text-gray-500 pt-3 border-t border-slate-700">
             <span>{market.volume} Vol.</span>
-            <span className="bg-slate-700/50 px-2 py-1 rounded text-gray-300">
+            <span className="px-5 py-2 rounded-full bg-slate-800/60 text-base font-semibold text-gray-300 border border-slate-700">
               {market.category}
             </span>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function HunchLogo() {
+  return (
+    <svg width="320" height="140" viewBox="0 0 520 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="blueGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#38BDF8"/>
+          <stop offset="100%" stopColor="#2563EB"/>
+        </linearGradient>
+        <linearGradient id="purpleGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#A855F7"/>
+          <stop offset="100%" stopColor="#7C3AED"/>
+        </linearGradient>
+        <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#38BDF8"/>
+          <stop offset="100%" stopColor="#A855F7"/>
+        </linearGradient>
+      </defs>
+      <g transform="translate(196,20)">
+        <rect x="0" y="0" rx="18" ry="18" width="64" height="48" fill="url(#blueGrad)"/>
+        <polygon points="22,48 32,62 42,48" fill="url(#blueGrad)"/>
+        <path d="M18 24 L28 34 L46 16" stroke="#ECFEFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+      </g>
+      <g transform="translate(260,20)">
+        <rect x="0" y="0" rx="18" ry="18" width="64" height="48" fill="url(#purpleGrad)"/>
+        <polygon points="22,48 32,62 42,48" fill="url(#purpleGrad)"/>
+        <path d="M22 16 L42 36 M42 16 L22 36" stroke="#FDF4FF" strokeWidth="5" strokeLinecap="round"/>
+      </g>
+      <text x="260" y="145" textAnchor="middle" fontSize="72" fontWeight="700" fontFamily="Inter, ui-sans-serif, system-ui" fill="url(#textGrad)">
+        Hunch
+      </text>
+      <text x="260" y="178" textAnchor="middle" fontSize="14" letterSpacing="2" fontFamily="Inter, ui-sans-serif, system-ui" fill="#64748B">
+        PREDICTION MARKETPLACE
+      </text>
+    </svg>
   );
 }
 
@@ -229,14 +266,14 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <header className="border-b border-slate-700/50 sticky top-0 z-40 bg-slate-950/95 backdrop-blur">
+      <header className="border-b border-slate-700/50 sticky top-0 z-40 bg-slate-950/95 backdrop-blur pt-4 pb-8 mt-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top Navigation */}
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-8">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                Polymarket
-              </h1>
+              <span className="block" style={{ minWidth: 320 }}>
+                <HunchLogo />
+              </span>
               {isConnected && (
                 <div className="flex items-center gap-3">
                   <Link 
@@ -379,7 +416,7 @@ export default function Home() {
           )}
 
           {/* Category Navigation */}
-          <div className="overflow-x-auto pb-4 -mx-4 px-4">
+          {/* <div className="overflow-x-auto pb-4 -mx-4 px-4">
             <div className="flex gap-2 min-w-min">
               {categories.map((category) => (
                 <button
@@ -394,10 +431,27 @@ export default function Home() {
                 </button>
               ))}
             </div>
-          </div>
+          </div> */}
         </div>
       </header>
 
+      <div className="overflow-x-auto pb-6 -mx-4 px-6 mt-6">
+        <div className="flex gap-3 min-w-min justify-center">
+          {categories.map((category) => (
+            <button
+              key={category}
+              className={`px-5 py-2 rounded-full whitespace-nowrap text-base font-semibold transition-all shadow-sm border-2 ${
+                category === 'Trending'
+                  ? 'bg-gradient-to-r from-blue-600/40 to-cyan-500/30 border-blue-500 text-blue-200 shadow-blue-500/10'
+                  : 'bg-slate-800/60 text-gray-300 border-slate-700 hover:bg-slate-700 hover:text-white hover:border-blue-400'
+              }`}
+              style={{ minWidth: 120 }}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search and Filter */}
