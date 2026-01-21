@@ -107,7 +107,7 @@ export default function MarketDetailPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${BACKEND_URL}/api/markets/${marketId}`, {
+        const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/markets/${marketId}`, {
           timeout: 10000,
         });
 
@@ -124,7 +124,7 @@ export default function MarketDetailPage() {
           let noPrice = 50;
 
           try {
-            const priceRes = await axios.get(`${BACKEND_URL}/api/orders/market/${backendMarket.id}/prices`, {
+            const priceRes = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/orders/market/${backendMarket.id}/prices`, {
               timeout: 8000,
             });
             if (priceRes.data?.success && priceRes.data.prices) {
@@ -175,7 +175,7 @@ export default function MarketDetailPage() {
     if (marketId) {
       const checkResolution = async () => {
         try {
-          const response = await axios.get(`${BACKEND_URL}/api/markets/${marketId}/resolution-status`, {
+          const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/markets/${marketId}/resolution-status`, {
             timeout: 10000,
           });
 
@@ -188,7 +188,7 @@ export default function MarketDetailPage() {
               const userAddress = address;
 
               try {
-                const winningsResponse = await axios.post(`${BACKEND_URL}/api/wallet/redeem-winnings`, {
+                const winningsResponse = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/redeem-winnings`, {
                   userAddress,
                   marketId,
                 });
@@ -228,7 +228,7 @@ export default function MarketDetailPage() {
             resolutionOutcome,
           });
 
-          const winningsResponse = await axios.post(`${BACKEND_URL}/api/wallet/redeem-winnings`, {
+          const winningsResponse = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/redeem-winnings`, {
             userAddress: walletToCheck,
             marketId,
           });
@@ -273,7 +273,7 @@ export default function MarketDetailPage() {
     if (isConnected && address) {
       const fetchMultisigAddress = async () => {
         try {
-          const response = await fetch(`/api/wallet/check-deployment/${address}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/check-deployment/${address}`);
           if (response.ok) {
             const data = await response.json();
             if (data.proxyAddress) {
@@ -306,7 +306,7 @@ export default function MarketDetailPage() {
     if (conditionKey && !marketCondition) {
       const fetchMarketCondition = async () => {
         try {
-          const response = await fetch(`/api/market-conditions/condition/${conditionKey}`);
+          const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/market-conditions/condition/${conditionKey}`);
           if (response.ok) {
             const data = await response.json();
             if (data.marketCondition) {
@@ -456,7 +456,7 @@ export default function MarketDetailPage() {
 
       setOrderError(null);
 
-      const response = await fetch('/api/orders/place', {
+      const response = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + '/api/orders/place', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -752,7 +752,7 @@ export default function MarketDetailPage() {
 
                                   try {
                                     // Get the redeemPositions call data from backend
-                                    const redeemResponse = await axios.post(`${BACKEND_URL}/api/wallet/redeem-winnings`, {
+                                    const redeemResponse = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/redeem-winnings`, {
                                       userAddress: multisigAddress,
                                       marketId,
                                     });

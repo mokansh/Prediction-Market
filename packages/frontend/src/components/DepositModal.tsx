@@ -192,7 +192,7 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
     try {
       console.log('[DepositModal] Checking deployment for:', address);
       // Call backend to check if wallet is deployed
-      const response = await axios.get(`${BACKEND_URL}/api/wallet/check-deployment/${address}`, {
+      const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/check-deployment/${address}`, {
         timeout: 10000, // 10 second timeout
       });
       console.log('[DepositModal] Deployment check response:', response.data);
@@ -326,8 +326,8 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       console.log('[DepositModal] Signature components - r:', sig.r, 's:', sig.s, 'v:', sig.v);
 
       // Send signature to backend
-      console.log('[DepositModal] Sending deploy request to:', `${BACKEND_URL}/api/wallet/deploy`);
-      const response = await axios.post(`${BACKEND_URL}/api/wallet/deploy`, {
+      console.log('[DepositModal] Sending deploy request to:', `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/wallet/deploy`);
+      const response = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/deploy`, {
         userAddress: address,
         signature: {
           r: sig.r,
@@ -381,7 +381,7 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
       // Get the nonce from the backend
       const nonceResponse = await axios.get(
-        `${BACKEND_URL}/api/wallet/nonce/${proxyAddress}`,
+        process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/nonce/${proxyAddress}`,
         { timeout: 10000 }
       );
       const nonce = nonceResponse.data.nonce;
@@ -441,7 +441,7 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       console.log('[DepositModal] Sending approval request to backend');
 
       const response = await axios.post(
-        `${BACKEND_URL}/api/wallet/approve-tokens`,
+        process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/approve-tokens`,
         {
           proxyAddress,
           safeTx: {

@@ -158,7 +158,7 @@ export default function Home() {
       setWalletError(null);
 
       try {
-        const response = await axios.get(`${BACKEND_URL}/api/wallet/check-deployment/${address}`, {
+        const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/wallet/check-deployment/${address}`, {
           timeout: 10000,
         });
 
@@ -183,7 +183,7 @@ export default function Home() {
     const fetchMarkets = async () => {
       setIsLoadingMarkets(true);
       try {
-        const response = await axios.get(`${BACKEND_URL}/api/markets`, {
+        const response = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/markets`, {
           timeout: 10000,
         });
 
@@ -192,7 +192,7 @@ export default function Home() {
           const marketsWithPrices = await Promise.all(
             response.data.markets.map(async (m: any) => {
               try {
-                const priceRes = await axios.get(`${BACKEND_URL}/api/orders/market/${m.id}/prices`, {
+                const priceRes = await axios.get(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/orders/market/${m.id}/prices`, {
                   timeout: 8000,
                 });
 

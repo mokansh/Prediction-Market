@@ -43,7 +43,7 @@ export default function AdminPage() {
         endTime,
       });
 
-      const response = await axios.post(`${BACKEND_URL}/api/admin/create-market`, {
+      const response = await axios.post(process.env.NEXT_PUBLIC_BACKEND_URL + `/api/admin/create-market`, {
         question: formData.question,
         description: formData.description,
         category: formData.category,
